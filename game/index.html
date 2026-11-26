@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>AERIS — Ridge Run</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0c1622;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif; color: #eef4f8; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .hidden { display: none !important; }
+
+  /* ---- HUD ---- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+  .hud-panel { position: absolute; background: rgba(8, 20, 32, 0.62); border: 1px solid rgba(140, 200, 240, 0.35);
+    border-radius: 8px; padding: 10px 14px; backdrop-filter: blur(2px); }
+  #hud-top-left { top: 14px; left: 14px; min-width: 210px; }
+  .hud-row { display: flex; align-items: baseline; gap: 8px; line-height: 1.35; }
+  .hud-label { width: 34px; font-size: 11px; letter-spacing: 0.12em; color: #8fc7ec; font-weight: 700; }
+  .hud-big { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; color: #fff; text-shadow: 0 0 8px rgba(90, 180, 255, 0.6); }
+  .hud-mid { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; color: #fff; }
+  .hud-unit { font-size: 11px; color: #9db8cc; }
+  #hud-compass { top: 14px; left: 50%; transform: translateX(-50%); width: 340px; height: 34px; overflow: hidden; padding: 0; }
+  #hud-compass-strip { position: absolute; left: 50%; top: 5px; display: inline-flex; white-space: nowrap; will-change: transform; }
+  .hud-compass-tick { display: inline-block; width: 96px; text-align: center; font-size: 13px; font-weight: 700; color: #cfe6f5; }
+  #hud-compass-needle { position: absolute; left: 50%; transform: translateX(-50%); bottom: 2px; color: #ffd34d; font-size: 13px; line-height: 1; }
+  #hud-waypoint { top: 56px; left: 50%; transform: translateX(-50%); padding: 6px 14px; font-size: 15px; font-weight: 800; }
+  #hud-wp-arrow { display: inline-block; color: #37e08a; font-size: 17px; margin-right: 8px; text-shadow: 0 0 8px rgba(55, 224, 138, 0.7); }
+  #hud-wp-dist { font-variant-numeric: tabular-nums; color: #fff; }
+  #hud-wind-arrow { display: inline-block; color: #8fc7ec; }
+  #hud-progress { margin-top: 4px; letter-spacing: 6px; font-size: 13px; }
+  .hud-dot { color: rgba(255,255,255,0.35); }
+  .hud-dot.done { color: #37e08a; }
+  .hud-dot.current { color: #ffd34d; }
+  .hud-dot.landing { color: #ff8a3c; }
+  #hud-top-right { top: 14px; right: 14px; min-width: 230px; }
+  .hud-bar { flex: 1; height: 10px; background: rgba(255,255,255,0.14); border-radius: 5px; overflow: hidden; }
+  .hud-fill { height: 100%; border-radius: 5px; }
+  .hud-fill.thr { background: #57b6ff; }
+  .hud-fill.fuel { background: #37e08a; }
+  .hud-fill.fuel.low { background: #ff5347; }
+  .hud-fill.dmg { background: #ffb020; }
+  #hud-horizon { left: 14px; bottom: 14px; padding: 8px; text-align: center; }
+  .hud-horizon-label { font-size: 10px; letter-spacing: 0.14em; color: #8fc7ec; margin-top: 2px; }
+  #hud-bottom { left: 50%; bottom: 14px; transform: translateX(-50%); text-align: center; min-width: 420px; }
+  /* On the title screen the lower HUD panels step aside for the mission list. */
+  #hud.title-mode #hud-bottom, #hud.title-mode #hud-horizon, #hud.title-mode #hud-waypoint, #hud.title-mode #hud-compass { display: none; }
+  /* In cockpit view the 3D panel carries the instruments; the lower DOM bar steps aside. */
+  #hud.cockpit-mode #hud-bottom { display: none; }
+  #hud-objective { font-size: 15px; font-weight: 700; color: #ffd34d; }
+  #hud-sub { font-size: 13px; color: #cfe6f5; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  #hud-warn { position: absolute; top: 84px; left: 50%; transform: translateX(-50%); text-align: center; }
+  .hud-warn-item { display: inline-block; margin: 0 6px; padding: 4px 12px; background: rgba(200, 30, 20, 0.8);
+    border: 1px solid #ff8a7a; border-radius: 4px; font-weight: 800; letter-spacing: 0.1em; font-size: 14px;
+    animation: blink 0.7s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0.35; } }
+  #hud-centre { position: absolute; top: 32%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+  .hud-centre-title { font-size: 44px; font-weight: 900; color: #37e08a; text-shadow: 0 2px 18px rgba(0,0,0,0.6); letter-spacing: 0.08em; }
+  .hud-centre-sub { font-size: 16px; color: #fff; text-shadow: 0 1px 8px rgba(0,0,0,0.7); }
+
+  /* ---- Screens ---- */
+  .screen { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(180deg, rgba(6, 16, 28, 0.55), rgba(6, 16, 28, 0.82)); }
+  .screen-card { max-width: 640px; width: 92%; text-align: center; padding: 16px 30px; }
+  .screen-card h1 { font-size: 38px; margin: 0 0 2px; letter-spacing: 0.06em; color: #fff;
+    text-shadow: 0 0 24px rgba(87, 182, 255, 0.7); }
+  .screen-card h2 { font-size: 15px; margin: 0 0 8px; letter-spacing: 0.42em; color: #ffd34d; font-weight: 700; }
+  .screen-card p { font-size: 14px; line-height: 1.45; color: #d5e5f0; }
+  .mission-grid { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; }
+  .mission-btn { pointer-events: auto; cursor: pointer; text-align: left; background: rgba(20, 48, 72, 0.85);
+    border: 1px solid rgba(140, 200, 240, 0.4); border-radius: 8px; padding: 8px 14px; color: #eef4f8; }
+  .mission-btn:hover { border-color: #ffd34d; background: rgba(32, 70, 102, 0.9); }
+  .mission-btn b { font-size: 17px; letter-spacing: 0.06em; color: #fff; }
+  .mission-btn .key { float: right; background: #ffd34d; color: #122; border-radius: 4px; padding: 1px 8px; font-weight: 800; }
+  .mission-btn span { display: block; font-size: 13px; color: #a9c6da; margin-top: 2px; }
+  .mission-btn.locked { opacity: 0.45; cursor: default; }
+  .mission-btn.locked:hover { border-color: rgba(140, 200, 240, 0.4); background: rgba(20, 48, 72, 0.85); }
+  .mission-btn .key.locked-key { background: #5a6b7a; color: #d5e5f0; }
+  .mission-btn .done-tag { float: right; background: #37e08a; color: #0a2416; border-radius: 4px; padding: 1px 8px; font-weight: 800; margin-left: 6px; }
+  .controls { font-size: 12px; line-height: 1.6; color: #b8d2e4; text-align: left; column-count: 2; column-gap: 28px; margin: 6px 0 4px; }
+  .controls b { color: #fff; background: rgba(255,255,255,0.14); border-radius: 4px; padding: 0 6px; font-weight: 700; }
+  .btn { pointer-events: auto; cursor: pointer; display: inline-block; margin: 8px 6px 0; padding: 10px 22px;
+    background: #ffd34d; color: #16222e; border: none; border-radius: 6px; font-size: 15px; font-weight: 800; letter-spacing: 0.05em; }
+  .btn.ghost { background: transparent; color: #cfe6f5; border: 1px solid rgba(140, 200, 240, 0.5); }
+  #end-title { font-size: 46px; margin: 0 0 6px; letter-spacing: 0.06em; }
+  #end-sub { font-size: 16px; color: #d5e5f0; }
+  #end-score { font-size: 22px; font-weight: 800; color: #ffd34d; margin-top: 14px; }
+  #pause .screen-card h1 { font-size: 40px; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="hud"></div>
+
+<div id="title" class="screen">
+  <div class="screen-card">
+    <h1>AERIS</h1>
+    <h2>RIDGE RUN</h2>
+    <p>HOW TO PLAY — Fly the valley. Thread the glowing rings, mind your fuel,
+    and bring her home in one piece. Too slow and she stalls; too rough and the ridge wins.</p>
+    <div class="mission-grid">
+      <button class="mission-btn" id="mission-rings"><span class="key">1</span><b>RING RUN</b><span>8 rings down the valley — beat the clock</span></button>
+      <button class="mission-btn" id="mission-delivery"><span class="key">2</span><b>RIDGE DELIVERY</b><span>4 checkpoints, then land on the far strip</span></button>
+      <button class="mission-btn" id="mission-storm"><span class="key">3</span><b>STORM RIDGE</b><span>8 rings in gusting wind — a fast time trial</span></button>
+      <button class="mission-btn" id="mission-islands"><span class="key">4</span><b>ISLAND HOPPER</b><span>Courier run: ring, land and pick up on 3 island strips</span></button>
+      <button class="mission-btn" id="mission-dusk"><span class="key">5</span><b>DUSK RUN</b><span>8 rings at dusk — land on the lit home runway</span></button>
+    </div>
+    <div class="controls">
+      <div><b>Shift / W</b> throttle up</div>
+      <div><b>Ctrl / S</b> throttle down</div>
+      <div><b>↑ / ↓</b> pitch</div>
+      <div><b>← / →</b> or <b>A / D</b> bank &amp; turn</div>
+      <div><b>Q / E</b> rudder</div>
+      <div><b>F</b> flaps &nbsp; <b>B</b> brake</div>
+      <div><b>C</b> camera &nbsp; <b>M</b> mute</div>
+      <div><b>P</b> pause &nbsp; <b>R</b> restart</div>
+    </div>
+    <p style="font-size:12px;color:#8fa9bd">Mouse drag looks around and steers a little. Sound starts on your first click or key.</p>
+  </div>
+</div>
+
+<div id="pause" class="screen hidden">
+  <div class="screen-card">
+    <h1>PAUSED</h1>
+    <p>Press P to keep flying.</p>
+  </div>
+</div>
+
+<div id="end-screen" class="screen hidden">
+  <div class="screen-card">
+    <h1 id="end-title">LANDED</h1>
+    <p id="end-sub"></p>
+    <div id="end-score"></div>
+    <div>
+      <button class="btn" id="restart-btn">FLY AGAIN (R)</button>
+      <button class="btn ghost" id="title-btn">MISSIONS</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
